@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Takımlarım — Yeşil Vadi Halı Saha</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="nav-container"></div>
+
+    <div class="container page-wrap">
+        <div class="section-header">
+            <h2>Takımlarım</h2>
+        </div>
+
+        <div class="card" style="max-width: 420px; margin-bottom: 24px;">
+            <div class="card-title" style="margin-bottom: 14px;">Yeni Takım Oluştur</div>
+            <div id="create-alert"></div>
+            <div class="field">
+                <label for="team-name">Takım Adı</label>
+                <input type="text" id="team-name" placeholder="örn. Yıldızlar FC">
+            </div>
+            <button class="btn btn-primary btn-block" id="create-btn">Takım Oluştur</button>
+        </div>
+
+        <div id="list-area"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        requireAuth();
+        document.getElementById('nav-container').innerHTML = renderNavbar('teams');
+
+        async function loadTeams() {
+            const area = document.getElementById('list-area');
+            try {
+                const teams = await api.get('/api/teams/me');
+
+                if (teams.length === 0) {
+                    area.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>Henüz bir takımın yok.</div>`;
+                    return;
+                }
+
+                area.innerHTML = `<div class="grid grid-cards">${teams.map(t => `
+                    <div class="card">
+                        <div class="card-title">${escapeHtml(t.name)}</div>
+                        <div class="card-meta">Kaptan: ${escapeHtml(t.captainName)}</div>
+                    </div>
+                `).join('')}</div>`;
+            } catch (err) {
+                area.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        document.getElementById('create-btn').addEventListener('click', async () => {
+            const nameInput = document.getElementById('team-name');
+            const alertBox = document.getElementById('create-alert');
+            alertBox.innerHTML = '';
+
+            if (!nameInput.value.trim()) {
+                alertBox.innerHTML = `<div class="alert alert-error">Takım adı boş olamaz</div>`;
+                return;
+            }
+
+            try {
+                await api.post('/api/teams', { name: nameInput.value.trim() });
+                nameInput.value = '';
+                loadTeams();
+            } catch (err) {
+                alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        loadTeams();
+    </script>
+</body>
+</html>

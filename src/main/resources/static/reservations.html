@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maçlarım — Yeşil Vadi Halı Saha</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="nav-container"></div>
+
+    <div class="container page-wrap">
+        <div class="section-header">
+            <h2>Maçlarım</h2>
+            <a href="/venues.html" class="btn btn-primary btn-sm">+ Yeni Rezervasyon</a>
+        </div>
+        <p class="muted text-sm mt-0">Ayırdığın rezervasyonlar, katıldığın maçlar ve takım maçların — hepsi burada.</p>
+
+        <div class="flex gap-8" style="margin-bottom: 20px;">
+            <button class="btn btn-primary btn-sm" id="tab-upcoming-btn" onclick="switchTab('upcoming')">Gelecek Maçlarım</button>
+            <button class="btn btn-outline btn-sm" id="tab-past-btn" onclick="switchTab('past')">Geçmiş Maçlarım</button>
+        </div>
+
+        <div id="upcoming-area"></div>
+        <div id="past-area" style="display:none;"></div>
+    </div>
+
+    <!-- Eksik oyuncu ilanı acma modali -->
+    <div id="match-modal" style="display:none; position:fixed; inset:0; background:rgba(11,61,30,0.45); align-items:center; justify-content:center; z-index:100;">
+        <div class="card" style="max-width:380px; width:90%;">
+            <h3>Eksik Oyuncu İlanı Aç</h3>
+            <div id="match-alert"></div>
+            <div class="field">
+                <label>Kaç oyuncu eksik?</label>
+                <input type="number" id="missing-count" min="1" max="10" value="1">
+            </div>
+            <div class="flex gap-8">
+                <button class="btn btn-outline btn-block" onclick="closeMatchModal()">Vazgeç</button>
+                <button class="btn btn-primary btn-block" id="match-submit">İlanı Aç</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rakip bulma ilani acma modali -->
+    <div id="challenge-modal" style="display:none; position:fixed; inset:0; background:rgba(11,61,30,0.45); align-items:center; justify-content:center; z-index:100;">
+        <div class="card" style="max-width:380px; width:90%;">
+            <h3>Rakip Bul</h3>
+            <div id="challenge-alert"></div>
+            <div class="field">
+                <label>Hangi takımınla?</label>
+                <select id="team-select"></select>
+            </div>
+            <div class="field">
+                <label>Kaç kişilik maç arıyorsun?</label>
+                <input type="number" id="challenge-team-size" min="3" max="11" value="7">
+            </div>
+            <div class="flex gap-8">
+                <button class="btn btn-outline btn-block" onclick="closeChallengeModal()">Vazgeç</button>
+                <button class="btn btn-primary btn-block" id="challenge-submit">Meydan Oku</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        requireAuth();
+        document.getElementById('nav-container').innerHTML = renderNavbar('reservations');
+
+        let activeReservationId = null;
+        let cachedUpcoming = [];
+        let cachedPast = [];
+
+        function addDays(isoDate, days) {
+            const d = new Date(`${isoDate}T00:00:00`);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        }
+
+        function openMatchModal(reservationId) {
+            activeReservationId = reservationId;
+            document.getElementById('match-alert').innerHTML = '';
+            document.getElementById('missing-count').value = 1;
+            document.getElementById('match-modal').style.display = 'flex';
+        }
+        function closeMatchModal() {
+            document.getElementById('match-modal').style.display = 'none';
+        }
+
+        async function openChallengeModal(reservationId) {
+            activeReservationId = reservationId;
+            document.getElementById('challenge-alert').innerHTML = '';
+            document.getElementById('challenge-team-size').value = 7;
+            const select = document.getElementById('team-select');
+            select.innerHTML = '<option>Yükleniyor...</option>';
+            document.getElementById('challenge-modal').style.display = 'flex';
+
+            try {
+                const teams = await api.get('/api/teams/me');
+                if (teams.length === 0) {
+                    select.innerHTML = '<option value="">Önce bir takım oluşturmalısın</option>';
+                    return;
+                }
+                select.innerHTML = teams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+            } catch (err) {
+                document.getElementById('challenge-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+        function closeChallengeModal() {
+            document.getElementById('challenge-modal').style.display = 'none';
+        }
+
+        document.getElementById('match-submit').addEventListener('click', async () => {
+            const count = Number(document.getElementById('missing-count').value);
+            try {
+                await api.post('/api/open-matches', { reservationId: activeReservationId, missingPlayerCount: count });
+                closeMatchModal();
+                loadMatches();
+            } catch (err) {
+                document.getElementById('match-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        document.getElementById('challenge-submit').addEventListener('click', async () => {
+            const teamId = document.getElementById('team-select').value;
+            const teamSize = Number(document.getElementById('challenge-team-size').value);
+            if (!teamId) return;
+            try {
+                await api.post('/api/open-challenges', { reservationId: activeReservationId, teamId: Number(teamId), teamSize });
+                closeChallengeModal();
+                loadMatches();
+            } catch (err) {
+                document.getElementById('challenge-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        function switchTab(tab) {
+            const upcomingBtn = document.getElementById('tab-upcoming-btn');
+            const pastBtn = document.getElementById('tab-past-btn');
+            const upcomingArea = document.getElementById('upcoming-area');
+            const pastArea = document.getElementById('past-area');
+
+            if (tab === 'upcoming') {
+                upcomingBtn.className = 'btn btn-primary btn-sm';
+                pastBtn.className = 'btn btn-outline btn-sm';
+                upcomingArea.style.display = 'block';
+                pastArea.style.display = 'none';
+            } else {
+                upcomingBtn.className = 'btn btn-outline btn-sm';
+                pastBtn.className = 'btn btn-primary btn-sm';
+                upcomingArea.style.display = 'none';
+                pastArea.style.display = 'block';
+            }
+        }
+
+        function linkBadge(entry) {
+            if (entry.linkType === 'MATCH') {
+                return `<span class="badge badge-accepted">Maç Oluştu</span>`;
+            }
+            if (entry.linkType === 'OPEN_CHALLENGE') {
+                return entry.linkStatus === 'OPEN'
+                    ? `<span class="badge badge-open">Rakip Aranıyor</span>`
+                    : `<span class="badge badge-closed">Meydan Okuma Kapandı</span>`;
+            }
+            if (entry.linkType === 'OPEN_MATCH') {
+                return entry.linkStatus === 'OPEN'
+                    ? `<span class="badge badge-pending">Eksik Oyuncu</span>`
+                    : `<span class="badge badge-accepted">Kadro Tamamlandı</span>`;
+            }
+            return '';
+        }
+
+        function renderCard(entry) {
+            return `
+                <div class="card">
+                    <div class="flex-between">
+                        <div class="card-title">${escapeHtml(entry.venueName)}</div>
+                        ${linkBadge(entry)}
+                    </div>
+                    <div class="card-meta">${formatDate(entry.date)} · ${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}</div>
+                    <p class="text-sm muted">${escapeHtml(entry.roleLabel)}</p>
+                    ${entry.linkSummary ? `<p class="text-sm">${escapeHtml(entry.linkSummary)}</p>` : ''}
+                    ${entry.canManage && !entry.isPast ? `
+                        <div class="flex gap-8" style="flex-wrap: wrap;">
+                            <button class="btn btn-outline btn-sm" onclick="openMatchModal(${entry.reservationId})">Eksik Oyuncu İlanı Aç</button>
+                            <button class="btn btn-outline btn-sm" onclick="openChallengeModal(${entry.reservationId})">Rakip Bul</button>
+                        </div>` : ''}
+                </div>`;
+        }
+
+        function renderList(areaId, list, emptyMessage) {
+            const area = document.getElementById(areaId);
+            if (list.length === 0) {
+                area.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>${emptyMessage}</div>`;
+                return;
+            }
+            area.innerHTML = `<div class="grid grid-cards">${list.map(renderCard).join('')}</div>`;
+        }
+
+        async function loadMatches() {
+            document.getElementById('upcoming-area').innerHTML = `<p class="muted text-sm">Yükleniyor...</p>`;
+            document.getElementById('past-area').innerHTML = '';
+
+            try {
+                const [myReservations, myJoinRequests, myMatches, myTeams] = await Promise.all([
+                    api.get('/api/reservations/me'),
+                    api.get('/api/join-requests/me'),
+                    api.get('/api/matches/me'),
+                    api.get('/api/teams/me')
+                ]);
+
+                const myTeamIds = new Set(myTeams.map(t => t.id));
+                const seenReservationIds = new Set(myReservations.map(r => r.id));
+                const entries = [];
+
+                myReservations.forEach(r => {
+                    entries.push({
+                        reservationId: r.id,
+                        venueName: r.venueName,
+                        date: r.date,
+                        startTime: r.startTime,
+                        endTime: r.endTime,
+                        roleLabel: 'Senin rezervasyonun',
+                        linkType: r.linkType,
+                        linkStatus: r.linkStatus,
+                        linkSummary: r.linkSummary,
+                        canManage: r.linkType === 'NONE'
+                    });
+                });
+
+                myJoinRequests
+                    .filter(jr => jr.status === 'ACCEPTED')
+                    .forEach(jr => {
+                        entries.push({
+                            reservationId: null,
+                            venueName: jr.venueName,
+                            date: jr.date,
+                            startTime: jr.startTime,
+                            endTime: jr.endTime,
+                            roleLabel: 'Katıldığın maç (eksik oyuncu)',
+                            linkType: null,
+                            linkSummary: null,
+                            canManage: false
+                        });
+                    });
+
+                myMatches
+                    .filter(m => !seenReservationIds.has(m.reservationId))
+                    .forEach(m => {
+                        const myTeamIsHome = myTeamIds.has(m.homeTeamId);
+                        const myTeamName = myTeamIsHome ? m.homeTeamName : m.awayTeamName;
+                        const opponentName = myTeamIsHome ? m.awayTeamName : m.homeTeamName;
+                        entries.push({
+                            reservationId: null,
+                            venueName: m.venueName,
+                            date: m.date,
+                            startTime: m.startTime,
+                            endTime: m.endTime,
+                            roleLabel: `Takım maçı: ${escapeHtml(myTeamName)} vs ${escapeHtml(opponentName)}`,
+                            linkType: 'MATCH',
+                            linkSummary: null,
+                            canManage: false
+                        });
+                    });
+
+                entries.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+
+                const now = new Date();
+                cachedUpcoming = [];
+                cachedPast = [];
+                entries.forEach(e => {
+                    // Saha gunu 17:00-02:00 arasi calisiyor; 23:00'te baslayan bir rezervasyon
+                    // 00:00'da bitiyor, yani bitis saati aslinda bir sonraki takvim gunune ait.
+                    const endDate = e.endTime < e.startTime ? addDays(e.date, 1) : e.date;
+                    const endDateTime = new Date(`${endDate}T${e.endTime}`);
+                    e.isPast = endDateTime <= now;
+                    if (!e.isPast) {
+                        cachedUpcoming.push(e);
+                    } else {
+                        cachedPast.push(e);
+                    }
+                });
+                // Gecmis maclar en yakin zamanda oynanan en ustte olacak sekilde ters sirala.
+                cachedPast.reverse();
+
+                renderList('upcoming-area', cachedUpcoming, 'Henüz gelecek bir maçın yok. Hemen bir saha ayırt.');
+                renderList('past-area', cachedPast, 'Henüz geçmiş bir maçın yok.');
+            } catch (err) {
+                document.getElementById('upcoming-area').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        loadMatches();
+    </script>
+</body>
+</html>

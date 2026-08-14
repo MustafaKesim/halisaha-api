@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sahalar — Yeşil Vadi Halı Saha</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="nav-container"></div>
+
+    <section class="hero">
+        <div class="container hero-inner">
+            <h1>Sahanı seç, saatini ayarla</h1>
+            <p>Yeşil Vadi Halı Saha'nın iki sahasından birini seç, uygun saati bul, dakikalar içinde rezervasyonunu tamamla.</p>
+        </div>
+    </section>
+
+    <div class="container page-wrap">
+        <div class="section-header">
+            <h2>Sahalarımız</h2>
+        </div>
+        <div id="venues-list" class="grid grid-cards"></div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        requireAuth();
+        document.getElementById('nav-container').innerHTML = renderNavbar('venues');
+
+        async function loadVenues() {
+            const container = document.getElementById('venues-list');
+            try {
+                const venues = await api.get('/api/venues');
+
+                if (venues.length === 0) {
+                    container.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>Henüz saha eklenmemiş.</div>`;
+                    return;
+                }
+
+                container.innerHTML = venues.map(v => `
+                    <div class="card hoverable">
+                        <div class="card-title">${escapeHtml(v.name)}</div>
+                        <div class="card-meta">${escapeHtml(v.location)}</div>
+                        <div class="flex-between">
+                            <strong style="color: var(--green-700); font-size: 18px;">${v.pricePerHour} ₺ <span class="text-sm muted">/ saat</span></strong>
+                        </div>
+                        <div class="card-row">
+                            <a class="btn btn-primary btn-block" href="/book.html?venueId=${v.id}&venueName=${encodeURIComponent(v.name)}">Rezervasyon Yap</a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        loadVenues();
+    </script>
+</body>
+</html>

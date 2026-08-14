@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rezervasyon Yap — Yeşil Vadi Halı Saha</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="nav-container"></div>
+
+    <div class="container page-wrap">
+        <div class="section-header">
+            <h2 id="page-title">Rezervasyon Yap</h2>
+            <a href="/venues.html" class="btn btn-outline btn-sm">← Sahalara dön</a>
+        </div>
+
+        <div class="card" style="max-width: 560px;">
+            <div id="alert-box"></div>
+
+            <div class="field">
+                <label for="date-input">Tarih</label>
+                <input type="date" id="date-input">
+            </div>
+
+            <div id="slots-area">
+                <p class="muted text-sm">Bir tarih seç, boş saatler burada görünecek.</p>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="confirm-btn" disabled style="margin-top: 10px;">Rezervasyonu Onayla</button>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        requireAuth();
+        document.getElementById('nav-container').innerHTML = renderNavbar('venues');
+
+        const params = new URLSearchParams(window.location.search);
+        const venueId = params.get('venueId');
+        const venueName = params.get('venueName') || 'Saha';
+        document.getElementById('page-title').textContent = venueName + ' — Rezervasyon Yap';
+
+        let selectedSlot = null;
+
+        const dateInput = document.getElementById('date-input');
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.min = today;
+        dateInput.value = today;
+
+        function showAlert(message, type) {
+            document.getElementById('alert-box').innerHTML = `<div class="alert alert-${type}">${escapeHtml(message)}</div>`;
+        }
+
+        async function loadSlots() {
+            const area = document.getElementById('slots-area');
+            const confirmBtn = document.getElementById('confirm-btn');
+            selectedSlot = null;
+            confirmBtn.disabled = true;
+            document.getElementById('alert-box').innerHTML = '';
+
+            if (!dateInput.value) return;
+
+            area.innerHTML = `<p class="muted text-sm">Yükleniyor...</p>`;
+
+            try {
+                const slots = await api.get(`/api/venues/${venueId}/available-slots?date=${dateInput.value}`);
+
+                if (slots.length === 0) {
+                    area.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>Bu tarihte boş saat kalmamış.</div>`;
+                    return;
+                }
+
+                area.innerHTML = `<div class="slot-grid">${slots.map(s => {
+                    const label = formatTime(s);
+                    return `<div class="slot-btn" data-slot="${s}">${label}</div>`;
+                }).join('')}</div>`;
+
+                document.querySelectorAll('.slot-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        selectedSlot = btn.dataset.slot;
+                        confirmBtn.disabled = false;
+                    });
+                });
+            } catch (err) {
+                area.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function addOneHour(time) {
+            const [h, m, s] = time.split(':').map(Number);
+            const nextHour = (h + 1) % 24;
+            return String(nextHour).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        }
+
+        document.getElementById('confirm-btn').addEventListener('click', async () => {
+            if (!selectedSlot) return;
+            const confirmBtn = document.getElementById('confirm-btn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Kaydediliyor...';
+
+            try {
+                await api.post('/api/reservations', {
+                    venueId: Number(venueId),
+                    date: dateInput.value,
+                    startTime: selectedSlot,
+                    endTime: addOneHour(selectedSlot)
+                });
+                window.location.href = '/reservations.html';
+            } catch (err) {
+                showAlert(err.message, 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Rezervasyonu Onayla';
+            }
+        });
+
+        dateInput.addEventListener('change', loadSlots);
+        loadSlots();
+    </script>
+</body>
+</html>

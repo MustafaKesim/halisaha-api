@@ -1,0 +1,19 @@
+spring.application.name=HaliSahaApi
+
+# Bu dosyayi src/main/resources/application.properties olarak kopyala ve
+# kendi local degerlerinle doldur. application.properties .gitignore'da,
+# yani gercek sifreler/secret'lar hicbir zaman git'e girmez.
+spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/halisaha}
+spring.datasource.username=${DB_USERNAME:postgres}
+spring.datasource.password=${DB_PASSWORD:CHANGE_ME}
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# openssl rand -base64 32 ile yeni bir deger uretebilirsin.
+app.jwt.secret=${JWT_SECRET:CHANGE_ME}
+app.jwt.expiration-ms=${JWT_EXPIRATION_MS:86400000}
+
+app.rate-limit.login.max-attempts=${LOGIN_RATE_LIMIT_MAX_ATTEMPTS:5}
+app.rate-limit.login.window-minutes=${LOGIN_RATE_LIMIT_WINDOW_MINUTES:15}

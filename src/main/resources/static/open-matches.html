@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eksik Oyuncu İlanları — Yeşil Vadi Halı Saha</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="nav-container"></div>
+
+    <div class="container page-wrap">
+        <div class="section-header">
+            <h2>Eksik Oyuncu İlanları</h2>
+        </div>
+        <p class="muted text-sm mt-0">Kadrosu eksik maçlara başvur, ya da kendi ilanına gelen başvuruları buradan yönet.</p>
+        <div id="list-area"></div>
+
+        <div class="section-header" style="margin-top: 40px;">
+            <h2>Başvurularım</h2>
+        </div>
+        <p class="muted text-sm mt-0">Başvurduğun ilanlar ve durumları.</p>
+        <div id="my-requests-area"></div>
+    </div>
+
+    <div id="applicants-modal" style="display:none; position:fixed; inset:0; background:rgba(11,61,30,0.45); align-items:center; justify-content:center; z-index:100;">
+        <div class="card" style="max-width:440px; width:92%; max-height:80vh; overflow-y:auto;">
+            <div class="flex-between">
+                <h3 style="margin:0;">Başvurular</h3>
+                <button class="btn btn-outline btn-sm" onclick="closeApplicantsModal()">Kapat</button>
+            </div>
+            <div id="applicants-alert"></div>
+            <div id="applicants-list"></div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        requireAuth();
+        document.getElementById('nav-container').innerHTML = renderNavbar('open-matches');
+
+        function statusBadge(status) {
+            const map = { OPEN: 'open', CLOSED: 'closed', PENDING: 'pending', ACCEPTED: 'accepted', REJECTED: 'rejected' };
+            const label = { OPEN: 'Açık', CLOSED: 'Kapalı', PENDING: 'Beklemede', ACCEPTED: 'Kabul Edildi', REJECTED: 'Reddedildi' };
+            return `<span class="badge badge-${map[status] || 'closed'}">${label[status] || status}</span>`;
+        }
+
+        async function loadMatches() {
+            const area = document.getElementById('list-area');
+            try {
+                const matches = await api.get('/api/open-matches');
+
+                if (matches.length === 0) {
+                    area.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>Şu an açık bir ilan yok.</div>`;
+                    return;
+                }
+
+                const currentUser = getCurrentUser();
+                const currentUserId = currentUser ? currentUser.id : null;
+
+                area.innerHTML = `<div class="grid grid-cards">${matches.map(m => {
+                    const isMine = currentUserId != null && m.ownerId === currentUserId;
+                    return `
+                    <div class="card">
+                        <div class="flex-between">
+                            <div class="card-title">${escapeHtml(m.venueName)}</div>
+                            <div class="flex gap-8">
+                                ${isMine ? '<span class="badge badge-mine">Senin İlanın</span>' : ''}
+                                ${statusBadge(m.status)}
+                            </div>
+                        </div>
+                        <div class="card-meta">${formatDate(m.date)} · ${formatTime(m.startTime)} - ${formatTime(m.endTime)}</div>
+                        ${!isMine ? `<div class="card-meta">İlan sahibi: ${escapeHtml(m.ownerName)}</div>` : ''}
+                        <p class="text-sm">Kadro: <strong>${m.acceptedCount} / ${m.missingPlayerCount}</strong> kişi kabul edildi</p>
+                        <div class="flex gap-8" style="flex-wrap: wrap;">
+                            ${isMine
+                                ? `<button class="btn btn-outline btn-sm" onclick="openApplicants(${m.id})">Başvuranları Gör${m.pendingRequestCount > 0 ? ` <span class="badge badge-count">${m.pendingRequestCount}</span>` : ''}</button>`
+                                : `<button class="btn btn-primary btn-sm" onclick="apply(${m.id}, this)">Başvur</button>`
+                            }
+                        </div>
+                    </div>
+                `;
+                }).join('')}</div>`;
+            } catch (err) {
+                area.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        async function apply(matchId, btn) {
+            btn.disabled = true;
+            const original = btn.textContent;
+            btn.textContent = '...';
+            try {
+                await api.post('/api/join-requests', { openMatchId: matchId });
+                btn.textContent = 'Başvuruldu ✓';
+                loadMyRequests();
+            } catch (err) {
+                showAlert(err.message, 'error');
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        }
+
+        async function loadMyRequests() {
+            const area = document.getElementById('my-requests-area');
+            try {
+                const requests = await api.get('/api/join-requests/me');
+
+                if (requests.length === 0) {
+                    area.innerHTML = `<div class="empty-state"><span class="ball">⚽</span>Henüz bir ilana başvurmadın.</div>`;
+                    return;
+                }
+
+                area.innerHTML = `<div class="grid grid-cards">${requests.map(r => `
+                    <div class="card">
+                        <div class="flex-between">
+                            <div class="card-title">${escapeHtml(r.venueName)}</div>
+                            ${statusBadge(r.status)}
+                        </div>
+                        <div class="card-meta">${formatDate(r.date)} · ${formatTime(r.startTime)} - ${formatTime(r.endTime)}</div>
+                    </div>
+                `).join('')}</div>`;
+            } catch (err) {
+                area.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        let activeMatchId = null;
+
+        async function openApplicants(matchId) {
+            activeMatchId = matchId;
+            document.getElementById('applicants-alert').innerHTML = '';
+            const listEl = document.getElementById('applicants-list');
+            listEl.innerHTML = '<p class="muted text-sm">Yükleniyor...</p>';
+            document.getElementById('applicants-modal').style.display = 'flex';
+
+            try {
+                const requests = await api.get(`/api/open-matches/${matchId}/join-requests`);
+                renderApplicants(requests);
+            } catch (err) {
+                listEl.innerHTML = '';
+                document.getElementById('applicants-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function renderApplicants(requests) {
+            const listEl = document.getElementById('applicants-list');
+            if (requests.length === 0) {
+                listEl.innerHTML = `<p class="muted text-sm">Henüz başvuru yok.</p>`;
+                return;
+            }
+            listEl.innerHTML = requests.map(r => `
+                <div class="card" style="margin-bottom:10px; padding:14px;">
+                    <div class="flex-between">
+                        <strong>${escapeHtml(r.applicantName)}</strong>
+                        ${statusBadge(r.status)}
+                    </div>
+                    ${r.status === 'PENDING' ? `
+                        <div class="flex gap-8" style="margin-top:10px;">
+                            <button class="btn btn-primary btn-sm btn-block" onclick="respond(${r.id}, true)">Kabul Et</button>
+                            <button class="btn btn-danger btn-sm btn-block" onclick="respond(${r.id}, false)">Reddet</button>
+                        </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function respond(joinRequestId, accept) {
+            try {
+                await api.post(`/api/join-requests/${joinRequestId}/${accept ? 'accept' : 'reject'}`, {});
+                await openApplicants(activeMatchId);
+                loadMatches();
+            } catch (err) {
+                document.getElementById('applicants-alert').innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function closeApplicantsModal() {
+            document.getElementById('applicants-modal').style.display = 'none';
+        }
+
+        loadMatches();
+        loadMyRequests();
+    </script>
+</body>
+</html>
