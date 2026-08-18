@@ -103,7 +103,9 @@ public class OpenChallengeController {
                 challenge.getTeam().getId(),
                 challenge.getTeam().getName(),
                 challenge.getTeamSize(),
-                challenge.getStatus().name()
+                challenge.getStatus().name(),
+                challenge.getTeam().getCaptain().getId(),
+                challenge.getTeam().getCaptain().getFullName()
         );
     }
 }

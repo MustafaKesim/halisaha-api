@@ -89,7 +89,7 @@ public class OpenChallengeService {
             throw new ConflictException("Bu meydan okuma artık kapalı");
         }
 
-        if (challenge.getTeam().getId().equals(challengerTeam.getId())) {
+        if (challenge.getTeam().getCaptain().getId().equals(currentUser.getId())) {
             throw new ForbiddenException("Kendi meydan okumana kabul veremezsin");
         }
 

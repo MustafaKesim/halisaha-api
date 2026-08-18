@@ -110,6 +110,18 @@ class OpenChallengeServiceTest {
     }
 
     @Test
+    void acceptChallenge_throwsForbidden_whenAcceptingOwnChallengeWithADifferentCaptainedTeam() {
+        Team secondTeamSameOwner = Team.builder().id(70L).name("Ikinci Takim").captain(owner).build();
+        OpenChallenge challenge = OpenChallenge.builder().id(200L).team(homeTeam)
+                .reservation(reservation).status(OpenChallengeStatus.OPEN).teamSize(7).build();
+        when(teamRepository.findById(70L)).thenReturn(Optional.of(secondTeamSameOwner));
+        when(openChallengeRepository.findByIdForUpdate(200L)).thenReturn(Optional.of(challenge));
+
+        assertThatThrownBy(() -> openChallengeService.acceptChallenge(200L, 70L, owner))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
     void acceptChallenge_throwsConflict_whenAlreadyClosed() {
         OpenChallenge challenge = OpenChallenge.builder().id(200L).team(homeTeam)
                 .reservation(reservation).status(OpenChallengeStatus.CLOSED).teamSize(7).build();

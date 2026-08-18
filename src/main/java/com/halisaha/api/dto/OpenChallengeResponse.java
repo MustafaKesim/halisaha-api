@@ -13,5 +13,7 @@ public record OpenChallengeResponse(
         Long teamId,
         String teamName,
         Integer teamSize,
-        String status
+        String status,
+        Long ownerId,
+        String ownerName
 ) {}

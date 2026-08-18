@@ -47,19 +47,30 @@
                     return;
                 }
 
-                area.innerHTML = `<div class="grid grid-cards">${challenges.map(c => `
+                const currentUser = getCurrentUser();
+                const currentUserId = currentUser ? currentUser.id : null;
+
+                area.innerHTML = `<div class="grid grid-cards">${challenges.map(c => {
+                    const isMine = currentUserId != null && c.ownerId === currentUserId;
+                    return `
                     <div class="card">
                         <div class="flex-between">
                             <div class="card-title">${escapeHtml(c.teamName)}</div>
-                            <span class="badge badge-open">Rakip Arıyor</span>
+                            <div class="flex gap-8">
+                                ${isMine ? '<span class="badge badge-mine">Senin İlanın</span>' : ''}
+                                <span class="badge badge-open">Rakip Arıyor</span>
+                            </div>
                         </div>
                         <div class="card-meta">${escapeHtml(c.venueName)} · ${formatDate(c.date)} · ${formatTime(c.startTime)} - ${formatTime(c.endTime)}</div>
+                        ${!isMine ? `<div class="card-meta">İlan sahibi: ${escapeHtml(c.ownerName)}</div>` : ''}
                         <p class="text-sm">${c.teamSize}'e${c.teamSize} maç aranıyor</p>
+                        ${!isMine ? `
                         <div class="card-row">
                             <button class="btn btn-primary btn-block" onclick="openAcceptModal(${c.id})">Meydan Okumayı Kabul Et</button>
-                        </div>
+                        </div>` : ''}
                     </div>
-                `).join('')}</div>`;
+                `;
+                }).join('')}</div>`;
             } catch (err) {
                 area.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
             }
