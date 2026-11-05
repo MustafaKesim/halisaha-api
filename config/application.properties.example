@@ -1,0 +1,7 @@
+# Bu dosyayi config/application.properties olarak kopyala ve kendi local
+# degerlerinle doldur. config/application.properties .gitignore'da; Spring Boot
+# bu dosyayi otomatik okur ve src/main/resources'taki ayarlarin ustune yazar.
+spring.datasource.password=CHANGE_ME
+# openssl rand -base64 32 ile yeni bir deger uretebilirsin.
+app.jwt.secret=CHANGE_ME
+spring.jpa.show-sql=true

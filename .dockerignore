@@ -1,0 +1,6 @@
+target/
+.git
+.vscode/
+*.log
+HELP.md
+config/
