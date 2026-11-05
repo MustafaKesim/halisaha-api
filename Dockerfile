@@ -16,6 +16,7 @@ WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 
 # Render PORT env degiskenini verir; Spring Boot'a server.port olarak aktariyoruz.
-ENV JAVA_OPTS="-Xmx384m"
+# Render sunuculari UTC calisir; "gecmis/gelecek" hesaplari Turkiye saatine gore yapilmali.
+ENV JAVA_OPTS="-Xmx384m -Duser.timezone=Europe/Istanbul"
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=${PORT:-8080} -jar app.jar"]

@@ -51,7 +51,7 @@ class OpenChallengeServiceTest {
     private final User owner = User.builder().id(1L).build();
     private final User rivalCaptain = User.builder().id(2L).build();
     private final Reservation reservation = Reservation.builder().id(10L).user(owner)
-            .date(LocalDate.of(2026, 9, 1)).startTime(LocalTime.of(19, 0)).endTime(LocalTime.of(20, 0)).build();
+            .date(LocalDate.now().plusDays(30)).startTime(LocalTime.of(19, 0)).endTime(LocalTime.of(20, 0)).build();
     private final Team homeTeam = Team.builder().id(50L).name("Ev Sahibi").captain(owner).build();
     private final Team awayTeam = Team.builder().id(60L).name("Rakip").captain(rivalCaptain).build();
 

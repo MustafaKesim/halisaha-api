@@ -1,6 +1,7 @@
 package com.halisaha.api.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
@@ -65,6 +66,10 @@ public class ReservationService {
 
         LocalDate actualDate = resolveActualDate(businessDayDate, startTime);
 
+        if (LocalDateTime.of(actualDate, startTime).isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Başlangıç saati geçmiş bir rezervasyon yapılamaz");
+        }
+
         availabilityService.assertAvailable(user, actualDate, startTime, endTime);
 
         Venue venue = venueRepository.findByIdForUpdate(venueId)
@@ -100,9 +105,12 @@ public class ReservationService {
                 .filter(time -> time.getHour() < 2)
                 .forEach(takenStarts::add);
 
+        LocalDateTime now = LocalDateTime.now();
+
         return OPERATING_HOURS.stream()
                 .map(hour -> LocalTime.of(hour, 0))
                 .filter(slot -> !takenStarts.contains(slot))
+                .filter(slot -> !LocalDateTime.of(resolveActualDate(businessDayDate, slot), slot).isBefore(now))
                 .toList();
     }
 
